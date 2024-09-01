@@ -49,11 +49,11 @@ with st.sidebar.form(key='property_form'):
     property_address = st.text_input("Property Address")
     gps_coord = st.text_input("GPS Coordinates (optional)")
     property_name = st.text_input("Property Name")
-    key_type = st.text_input("Key Type")
+    key_type = st.selectbox("Key Type", ["Kwikset", "Schlage", "Mailbox"])
     pin_count = st.number_input("Pin Count", min_value=0, step=1)
     pin_depths = st.text_input("Pin Depths (comma-separated values)").split(',')
     image = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
-    user_access_class = st.text_input("User Access Class")
+    user_access_class = st.selectbox("User Access Class", ["Manager", "Owner", "Employee", "Resident"])
     user_access_level = st.number_input("User Access Level", min_value=0, step=1)
     
     submit_button = st.form_submit_button(label='Submit')
@@ -68,12 +68,14 @@ if submit_button:
     save_to_csv(entry)
     
     st.sidebar.success(f"Entry for Root ID {root_id} added successfully!")
-    st.experimental_rerun()
+
 
 # Load existing entries
 entries = load_entries()
 
 # Display the list of Property_Name elements
 st.header("List of Property Names")
-property_names = [entry["Property_Name"] for entry in entries]
-st.write(property_names)
+for i, entry in enumerate(entries):
+    if st.button(entry["Property_Name"], key=f"button_{i}"):
+        with st.expander(f"Details for {entry['Property_Name']}"):
+            st.write(entry)
