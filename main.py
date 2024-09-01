@@ -4,15 +4,15 @@ import csv
 import os
 
 # Function to create a dictionary entry
-def create_entry(root_id, property_address, gps_coord, property_name, key_type, pin_count, pin_depths, image, user_access_class, user_access_level):
+def create_entry(root_id, property_address, door_name, property_name, key_type, pin_count, pin_depths, image, user_access_class, user_access_level):
     return {
         "Root_id": root_id,
         "Property_Address": property_address,
-        "GPS_Coord": gps_coord,
+        "Door_Name": door_name,
         "Property_Name": property_name,
         "Key_Type": key_type,
         "Pin_Count": pin_count,
-        "Pin_Depths": [int(depth) for depth in pin_depths],
+        "Pin_Depths": pin_depths,
         "Image": image,
         "User_Access_Class": user_access_class,
         "User_Access_Level": user_access_level
