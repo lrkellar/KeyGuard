@@ -3,17 +3,21 @@ import uuid
 import csv
 import os
 
+# Directory to save uploaded images
+IMAGE_DIR = "uploaded_images"
+os.makedirs(IMAGE_DIR, exist_ok=True)
+
 # Function to create a dictionary entry
-def create_entry(root_id, property_address, door_name, property_name, key_type, pin_count, pin_depths, image, user_access_class, user_access_level):
+def create_entry(root_id, property_address, gps_coord, property_name, key_type, pin_count, pin_depths, image_path, user_access_class, user_access_level):
     return {
         "Root_id": root_id,
         "Property_Address": property_address,
-        "Door_Name": door_name,
+        "GPS_Coord": gps_coord,
         "Property_Name": property_name,
         "Key_Type": key_type,
         "Pin_Count": pin_count,
         "Pin_Depths": pin_depths,
-        "Image": image,
+        "Image_Path": image_path,
         "User_Access_Class": user_access_class,
         "User_Access_Level": user_access_level
     }
@@ -47,7 +51,7 @@ st.title("Property Data Entry")
 st.sidebar.header("Enter Property Data")
 with st.sidebar.form(key='property_form'):
     property_address = st.text_input("Property Address")
-    gps_coord = st.text_input("GPS Coordinates (optional)")
+    door_name = st.text_input("Door Name (optional)", placeholder="Front Door, Riser Room, etc")
     property_name = st.text_input("Property Name")
     key_type = st.selectbox("Key Type", ["Kwikset", "Schlage", "Mailbox"])
     pin_count = st.number_input("Pin Count", min_value=0, step=1)
@@ -61,7 +65,13 @@ with st.sidebar.form(key='property_form'):
 # Handle form submission
 if submit_button:
     root_id = str(uuid.uuid4())  # Generate a random UUID for Root ID
-    entry = create_entry(root_id, property_address, gps_coord, property_name, key_type, pin_count, pin_depths, image, user_access_class, user_access_level)
+    image_path = None
+    if image is not None:
+        image_path = os.path.join(IMAGE_DIR, f"{root_id}_{image.name}")
+        with open(image_path, "wb") as f:
+            f.write(image.getbuffer())
+    
+    entry = create_entry(root_id, property_address, door_name, property_name, key_type, pin_count, pin_depths, image_path, user_access_class, user_access_level)
     main_dict[root_id] = entry
     
     # Save entry to CSV
@@ -69,13 +79,21 @@ if submit_button:
     
     st.sidebar.success(f"Entry for Root ID {root_id} added successfully!")
 
-
-# Load existing entries
-entries = load_entries()
-
 # Display the list of Property_Name elements
-st.header("List of Property Names")
-for i, entry in enumerate(entries):
-    if st.button(entry["Property_Name"], key=f"button_{i}"):
-        with st.expander(f"Details for {entry['Property_Name']}"):
-            st.write(entry)
+
+from g_drive_service import GoogleDriveService
+
+def get_file_list():
+    selected_fields = "nextPageToken, files(id, name, webViewLink)"
+    g_drive_service = GoogleDriveService().build()
+    list_file = g_drive_service.files().list(fields=selected_fields).execute()
+    return list_file.get("files")
+
+st.title("Key List")
+
+files = get_file_list()
+if files:
+    for file in files:
+        st.write(f"Name: {file['name']}, Link: {file['webViewLink']}")
+else:
+    st.write("No files found.")
