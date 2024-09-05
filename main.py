@@ -2,6 +2,9 @@ import streamlit as st
 import uuid
 import csv
 import os
+from g_drive_service import GoogleDriveService
+from googleapiclient.http import MediaIoBaseDownload
+import io
 
 # Directory to save uploaded images
 IMAGE_DIR = "uploaded_images"
@@ -23,7 +26,7 @@ def create_entry(root_id, property_address, gps_coord, property_name, key_type, 
     }
 
 # Function to save entry to CSV
-def save_to_csv(entry, filename='property_entries.csv'):
+def save_to_csv(entry, filename='KeyIndex.csv'):
     file_exists = os.path.isfile(filename)
     with open(filename, mode='a', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=entry.keys())
@@ -32,7 +35,7 @@ def save_to_csv(entry, filename='property_entries.csv'):
         writer.writerow(entry)
 
 # Function to load entries from CSV
-def load_entries(filename='property_entries.csv'):
+def load_entries(filename='KeyIndex.csv'):
     entries = []
     if os.path.isfile(filename):
         with open(filename, mode='r') as file:
@@ -40,6 +43,17 @@ def load_entries(filename='property_entries.csv'):
             for row in reader:
                 entries.append(row)
     return entries
+
+# Function to download file from Google Drive
+def download_file(file_id, file_name):
+    service = GoogleDriveService().build()
+    request = service.files().get_media(fileId=file_id)
+    fh = io.FileIO(file_name, 'wb')
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while done is False:
+        status, done = downloader.next_chunk()
+    return file_name
 
 # Initialize the main dictionary
 main_dict = {}
@@ -77,23 +91,23 @@ if submit_button:
     # Save entry to CSV
     save_to_csv(entry)
     
+    # Upload CSV to Google Drive
+    g_drive_service = GoogleDriveService()
+    g_drive_service.upload_file('KeyIndex.csv', 'KeyIndex.csv')
+    
     st.sidebar.success(f"Entry for Root ID {root_id} added successfully!")
 
-# Display the list of Property_Name elements
+# Display the contents of KeyIndex.csv from Google Drive
+st.title("Key Index Contents")
 
-from g_drive_service import GoogleDriveService
+# Assuming you have the file ID of KeyIndex.csv
+file_id = 'KeyIndex.csv'  # Replace with the actual file ID
+download_file(file_id, 'KeyIndex.csv')
 
-def get_file_list():
-    selected_fields = "nextPageToken, files(id, name, webViewLink)"
-    g_drive_service = GoogleDriveService().build()
-    list_file = g_drive_service.files().list(fields=selected_fields).execute()
-    return list_file.get("files")
-
-st.title("Key List")
-
-files = get_file_list()
-if files:
-    for file in files:
-        st.write(f"Name: {file['name']}, Link: {file['webViewLink']}")
+entries = load_entries('KeyIndex.csv')
+if entries:
+    for entry in entries:
+        st.write(entry)
 else:
-    st.write("No files found.")
+    st.write("No entries found.")
+
