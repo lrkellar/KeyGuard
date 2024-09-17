@@ -1,4 +1,0 @@
-main functions, pulling files from keyguard data folder
-
-need to add 
-login authentication (copy from ragini)

@@ -1,113 +1,101 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 import uuid
-import csv
-import os
-from g_drive_service import GoogleDriveService
-from googleapiclient.http import MediaIoBaseDownload
+from PIL import Image
+from rembg import remove
 import io
 
-# Directory to save uploaded images
-IMAGE_DIR = "uploaded_images"
-os.makedirs(IMAGE_DIR, exist_ok=True)
-
-# Function to create a dictionary entry
-def create_entry(root_id, property_address, gps_coord, property_name, key_type, pin_count, pin_depths, image_path, user_access_class, user_access_level):
-    return {
-        "Root_id": root_id,
-        "Property_Address": property_address,
-        "GPS_Coord": gps_coord,
-        "Property_Name": property_name,
-        "Key_Type": key_type,
-        "Pin_Count": pin_count,
-        "Pin_Depths": pin_depths,
-        "Image_Path": image_path,
-        "User_Access_Class": user_access_class,
-        "User_Access_Level": user_access_level
-    }
-
-# Function to save entry to CSV
-def save_to_csv(entry, filename='KeyIndex.csv'):
-    file_exists = os.path.isfile(filename)
-    with open(filename, mode='a', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=entry.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(entry)
-
-# Function to load entries from CSV
-def load_entries(filename='KeyIndex.csv'):
-    entries = []
-    if os.path.isfile(filename):
-        with open(filename, mode='r') as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                entries.append(row)
-    return entries
-
-# Function to download file from Google Drive
-def download_file(file_id, file_name):
-    service = GoogleDriveService().build()
-    request = service.files().get_media(fileId=file_id)
-    fh = io.FileIO(file_name, 'wb')
-    downloader = MediaIoBaseDownload(fh, request)
-    done = False
-    while done is False:
-        status, done = downloader.next_chunk()
-    return file_name
-
-# Initialize the main dictionary
-main_dict = {}
+st.set_page_config(layout="wide")
 
 # Streamlit app
-st.title("Property Data Entry")
+st.title("KeyGuard")
+st.markdown("A digital library of your keys")
+code = st.secrets['passcode']
+# Create a placeholder for the passcode input
+passcode_placeholder = st.empty()
+# Check if the user is authenticated
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+# Display the passcode input if not authenticated
+if not st.session_state.authenticated:
+    passcode = passcode_placeholder.text_input(label="Please enter your passcode", value="Speak friend and enter", type="password")
+    if passcode == st.secrets['passcode']:
+        st.session_state.authenticated = True
+        passcode_placeholder.empty()  # Clear the passcode input
+if st.session_state.authenticated:
+    conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Sidebar for data entry
-st.sidebar.header("Enter Property Data")
-with st.sidebar.form(key='property_form'):
-    property_address = st.text_input("Property Address")
-    door_name = st.text_input("Door Name (optional)", placeholder="Front Door, Riser Room, etc")
-    property_name = st.text_input("Property Name")
-    key_type = st.selectbox("Key Type", ["Kwikset", "Schlage", "Mailbox"])
-    pin_count = st.number_input("Pin Count", min_value=0, step=1)
-    pin_depths = st.text_input("Pin Depths (comma-separated values)").split(',')
-    image = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
-    user_access_class = st.selectbox("User Access Class", ["Manager", "Owner", "Employee", "Resident"])
-    user_access_level = st.number_input("User Access Level", min_value=0, step=1)
-    
-    submit_button = st.form_submit_button(label='Submit')
+    if conn:
+        existing_data = conn.read(worksheet="KeyIndex", usecols=list(range(1, 10)), ttl=5)
+        existing_data = existing_data.dropna(how="all")
+        
+        # Add a search box
+        search_query = st.text_input("Search keys", "")
+        
+        if search_query:
+            filtered_data = existing_data[existing_data.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+        else:
+            filtered_data = existing_data
+        
+        st.dataframe(filtered_data)
+    else:
+        st.error("Failed to connect to Google Sheets. Please check your connection settings.")
 
-# Handle form submission
-if submit_button:
-    root_id = str(uuid.uuid4())  # Generate a random UUID for Root ID
-    image_path = None
-    if image is not None:
-        image_path = os.path.join(IMAGE_DIR, f"{root_id}_{image.name}")
-        with open(image_path, "wb") as f:
-            f.write(image.getbuffer())
-    
-    entry = create_entry(root_id, property_address, door_name, property_name, key_type, pin_count, pin_depths, image_path, user_access_class, user_access_level)
-    main_dict[root_id] = entry
-    
-    # Save entry to CSV
-    save_to_csv(entry)
-    
-    # Upload CSV to Google Drive
-    g_drive_service = GoogleDriveService()
-    g_drive_service.upload_file('KeyIndex.csv', 'KeyIndex.csv')
-    
-    st.sidebar.success(f"Entry for Root ID {root_id} added successfully!")
+    KEY_TYPES = ["Kwikset", "Schlage"]
+    PIN_COUNTS = [5, 6]
 
-# Display the contents of KeyIndex.csv from Google Drive
-st.title("Key Index Contents")
+    User_access_class = "Admin"
+    User_access_level = "test_id"
 
-# Assuming you have the file ID of KeyIndex.csv
-file_id = 'KeyIndex.csv'  # Replace with the actual file ID
-download_file(file_id, 'KeyIndex.csv')
+    with st.sidebar:
+        with st.form(key="vendor_form"):
+            Property_Address = st.text_input(label="Property Address", placeholder="30 Rockefeller")
+            Door_name = st.text_input(label="Door name or description*", placeholder="Front door, riser room, or Apartment A")
+            Property_name = st.text_input(label="Property Name*", placeholder="30 Rock")
+            Key_type = st.selectbox(label="Key Brand", options=KEY_TYPES)
+            Pin_count = st.selectbox(label="Pin Count", options=PIN_COUNTS)
+            Pin_depths = st.text_input(label="Pin Depths", placeholder="examples 5 Pin: 14241 or 6 pin: 334422")
+            Picture = st.file_uploader(label="Upload an image", type=["png", "jpg", "jpeg"])
 
-entries = load_entries('KeyIndex.csv')
-if entries:
-    for entry in entries:
-        st.write(entry)
-else:
-    st.write("No entries found.")
+            st.markdown("**Optional**")
 
+            submit_button = st.form_submit_button(label="Add key")
+
+            if submit_button:
+                st.write("You pressed submit")
+
+                # Check if all mandatory fields are filled
+                if not Property_Address or not Key_type or not Pin_count:
+                    st.warning("Ensure all fields are filled out")
+                    st.stop()
+                else:
+                    key_entry = pd.DataFrame(
+                        [{
+                            "Root_id": uuid.uuid1(),
+                            "Property_Address": Property_Address,
+                            "Door_name": Door_name,
+                            "Property_name": Property_name,
+                            "Key_type": Key_type,
+                            "Pin_count": Pin_count,
+                            "Pin_depths": Pin_depths,
+                            "Image": None,  # Placeholder for the image
+                            "User_access_class": User_access_class,
+                            "User_access_level": User_access_level,
+                        }]
+                    )
+
+                    if Picture:
+                        Picture = Image.open(Picture)
+                        Picture = remove(Picture)
+                        # Convert the processed image to bytes
+                        buffered = io.BytesIO()
+                        Picture.save(buffered, format="PNG")
+                        img_str = buffered.getvalue()
+                        st.image(img_str, caption="Processed Image", use_column_width=True)
+                        key_entry.at[0, "Image"] = img_str  # Store the image bytes
+
+                    updated_df = pd.concat([existing_data, key_entry], ignore_index=True)
+                    conn.update(worksheet="KeyIndex", data=updated_df)
+
+                    st.success("Key successfully added!")
