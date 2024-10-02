@@ -3,3 +3,5 @@ pandas
 pillow
 rembg
 st-gsheets-connection
+matplotlib
+numpy
