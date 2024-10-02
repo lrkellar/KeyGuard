@@ -5,6 +5,7 @@ import uuid
 from PIL import Image
 from rembg import remove
 import io
+from pindisplay import create_kwikset_plot
 
 st.set_page_config(layout="wide")
 
@@ -27,7 +28,7 @@ if st.session_state.authenticated:
     conn = st.connection("gsheets", type=GSheetsConnection)
 
     if conn:
-        existing_data = conn.read(worksheet="KeyIndex", usecols=list(range(1, 10)), ttl=5)
+        existing_data = conn.read(worksheet="KeyIndex", usecols=list(range(1,7)), ttl=5)
         existing_data = existing_data.dropna(how="all")
         
         # Add a search box
@@ -47,6 +48,7 @@ if st.session_state.authenticated:
 
     User_access_class = "Admin"
     User_access_level = "test_id"
+    Door_name = "front door"
 
     with st.sidebar:
         with st.form(key="vendor_form"):
@@ -69,6 +71,8 @@ if st.session_state.authenticated:
                 if not Property_Address or not Key_type or not Pin_count:
                     st.warning("Ensure all fields are filled out")
                     st.stop()
+                if not Property_name:
+                    Property_name = Property_Address
                 else:
                     key_entry = pd.DataFrame(
                         [{
@@ -79,7 +83,6 @@ if st.session_state.authenticated:
                             "Key_type": Key_type,
                             "Pin_count": Pin_count,
                             "Pin_depths": Pin_depths,
-                            "Image": None,  # Placeholder for the image
                             "User_access_class": User_access_class,
                             "User_access_level": User_access_level,
                         }]
@@ -99,3 +102,4 @@ if st.session_state.authenticated:
                     conn.update(worksheet="KeyIndex", data=updated_df)
 
                     st.success("Key successfully added!")
+                    st.image(create_kwikset_plot(pin_count=Pin_count, pins=Pin_depths))
