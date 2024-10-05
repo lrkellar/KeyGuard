@@ -1,6 +1,6 @@
 streamlit
 pandas
-pillow
+pillow==9.4.0
 rembg
 st-gsheets-connection
 matplotlib
